@@ -2,12 +2,6 @@
 
 # Name:       Cris Shumack
 # Date:       10/14/2019
-# Assignment: Program 1
-
-# Notes:      I know that the functions are not optimized, and I think I could improve
-#	      running times for some; but, none of them timeout and they are passing
-#	      the all the tests. Sorry if there are a lot of comments. I was not sure
-#	      how much commenting was appropriate so I wanted to cover my bases. Thanks.
 
 dims()
 {
