@@ -1,0 +1,514 @@
+#!/bin/bash
+
+# Name:       Cris Shumack
+# Date:       10/14/2019
+# Assignment: Program 1
+
+# Notes:      I know that the functions are not optimized, and I think I could improve
+#	      running times for some; but, none of them timeout and they are passing
+#	      the all the tests. Sorry if there are a lot of comments. I was not sure
+#	      how much commenting was appropriate so I wanted to cover my bases. Thanks.
+
+dims()
+{
+	rows=0
+	columns=0
+
+	#Runs while there are lines in the file to read.
+	while read lines
+	do
+		rows=`expr $rows + 1`
+		
+		#Only runs once to count the number of columns in the file.
+		if [ $columns == 0 ]
+		then
+			for i in $lines
+			do
+				columns=`expr $columns + 1`
+			done
+		fi
+	#Added so that it can take input from a file or stdin.
+	#Solution found at: https://stackoverflow.com/questions/6980090/how-to-read-from-a-file-or-stdin-in-bash
+	done < "${1:-/dev/stdin}"
+
+	echo $rows $columns
+	exit 0
+}
+
+transpose()
+{
+	columns=0
+	index=1
+
+	tempColumns="tempColumnsFile$$"
+	tempTranspose="tempTransposeFile$$"
+
+	#Reads the first line of the file
+	read firstline < "$1"
+
+	#Counts the number of columns in the file.
+	for i in $firstline
+	do
+		columns=`expr $columns + 1`
+	done
+
+	#Runs while index is less than the number of columns.
+	while [[ "$index" -le "$columns" ]]
+	do
+		#Cuts the current index's column and writes it to tempColumns file.
+		cut -f "$index" "$1" > "$tempColumns"
+
+		#Creates a variable that contains the row created from using "ts -s '\n' '\t'" to transform
+		#the column cut above into a row. Did it this way so that I could use ${line%?} to get rid
+		#of the trailing tab before writing the new line into the tempTranspose file.
+		line=$(cat "$tempColumns" | tr -s '\n' '\t')
+		line=${line%?}
+
+		#To write the new line into our tempTranspose file.
+		echo "$line" >> "$tempTranspose"
+		
+		index=`expr $index + 1`
+	done
+
+	#Outputs the transposed matrix.
+	cat "$tempTranspose"
+
+	#Removes our temporary files used to transpose the matrix.
+	rm $tempColumns
+	rm $tempTranspose
+
+	exit 0
+}
+
+mean()
+{
+	columns=0
+	index=1
+
+	tempColumns="tempColumnsFile$$"
+	tempMean="tempMeanFile$$"
+
+	#Reads the first line of the file
+	read firstline < "$1"
+
+	#Counts the number of columns in the file.
+	for i in $firstline
+	do
+		columns=`expr $columns + 1`
+	done
+	
+	#Runs as long as index is less than or equal to columns.
+	while [[ "$index" -le "$columns" ]]
+	do
+		count=0
+		sum=0
+		mean=0
+
+		#Cuts the current index's column and writes it to tempColumns file.
+		cut -f "$index" "$1" > "$tempColumns"
+
+		#Creates a variable that contains the row created from using "ts -s '\n' '\t'" to transform
+		#the column cut above into a row.
+		line=$(cat "$tempColumns" | tr -s '\n' '\t')
+
+		for i in $line
+		do
+			count=`expr $count + 1`
+			sum=`expr $sum + $i`
+		done
+			
+		#Calculates the mean based on the sum and count calculated above, using the formula
+		#provided by the instructor in the assignment description.
+		mean=$(( ($sum + ($count/2)*( ($sum>0)*2-1 )) / $count ))
+
+		#Prints the mean into a temp file (tempMean) followed by a tab.
+		printf "%d\t" "$mean" >> $tempMean
+
+		index=`expr $index + 1`
+	done
+
+	#Removes the trailing tab from tempMean.
+	truncate -s -1 "$tempMean"
+
+	echo >> "$tempMean"
+	cat "$tempMean"
+
+	rm $tempColumns
+	rm $tempMean
+
+	exit 0
+}
+
+add()
+{
+	m1rows=0
+	m1columns=0
+	m2rows=0
+	m2columns=0
+	index=1
+	m1num=0
+	m2num=0
+	sum=0
+
+	#Runs while there are lines in the first file to read.
+	#Determines the dimensions of the first file so that I can compare
+	#to the second file.
+	while read m1lines
+	do
+		m1rows=`expr $m1rows + 1`
+		
+		#Only runs once to count the number of columns in the file.
+		if [ $m1columns == 0 ]
+		then
+			for i in $m1lines
+			do
+				m1columns=`expr $m1columns + 1`
+			done
+		fi
+	done < $1
+
+	#Runs while there are lines in the second file to read.
+	#Determines the dimensions of the second file so that I can compare
+	#to the first file.
+	while read m2lines
+	do
+		m2rows=`expr $m2rows + 1`
+		
+		#Only runs once to count the number of columns in the file.
+		if [ $m2columns == 0 ]
+		then
+			for i in $m2lines
+			do
+				m2columns=`expr $m2columns + 1`
+			done
+		fi
+	done < $2
+
+	#Checks to make sure the dimensions of the two matrices are equal.
+	#If they are equal, the function runs normally.
+	if [[ "$m1columns" == "$m2columns" && "$m1rows" == "$m2rows" ]]
+	then
+		tempSum="tempSumFile$$"
+
+		#While loop runs as long as there are lines to read in each of the matrix files passed in.
+		while read line1 && read line2 <&2
+	 	do
+			#Resets index back to 1 since it is changed in the while loop below.
+			index=1
+
+	 		while (( "$index" <= "$m1columns" ))
+	 		do
+				#Cuts the number from the index position of the line into a variable
+				#so that we can use it for the sum calculation below.
+	 			m1num=$( echo "$line1" | cut -f "$index" )
+	 			m2num=$( echo "$line2" | cut -f "$index" )
+
+	 			sum=$(( m1num + m2num ))
+	 			index=$(( index + 1 ))
+
+				#While the index is less than or equal to number of columns, sum is printed
+				#to tempSum followed by a tab. It is set up so that during the last loop of the while
+				#loop above, index will be equal to columns+1. For example, if the matrix is 2x4,
+				#the while loop will run 4 times, and the 4th time, index will equal 5. So due to the if
+				#statement below the last number will still be printed on the same line, but is followed with
+				#a newline rather than a tab, so that the next time the while read line loop runs, the printing
+				#correctly starts on a new line.
+	 			if [ "$index" -le "$m1columns" ]
+ 				then
+ 					printf '%s\t' "$sum" >> "$tempSum"
+ 				else 
+ 					printf '%s\n' "$sum" >> "$tempSum"
+ 				fi 
+			done
+		done <"$1" 2<"$2"
+
+		cat "$tempSum"
+
+		rm $tempSum
+		
+		exit 0
+	#If the matrices' dimensions are not equal, outputs it to the user,
+	#then exits and redirects to std error.
+	else
+		echo "Error. Matrices do not have the same dimensions." 1>&2
+		
+		exit 1	
+	fi
+
+	exit 0
+}
+
+multiply()
+{
+	m1rows=0
+	m1columns=0
+	m2rows=0
+	m2columns=0
+	m1num=0
+	m2num=0
+	index=1
+	index2=1
+	transIndex=1
+	sum=0
+
+	tempColumns="tempColumnsFile$$"
+	tempTranspose="tempTransposeFile$$"
+
+	#Runs while there are lines in the first file to read.
+	#Determines the dimensions of the first file so that I can compare
+	#to the second file.
+	while read m1lines
+	do
+		m1rows=`expr $m1rows + 1`
+		
+		#Only runs once to count the number of columns in the file.
+		if [ $m1columns == 0 ]
+		then
+			for i in $m1lines
+			do
+				m1columns=`expr $m1columns + 1`
+			done
+		fi
+	done < $1
+
+	#Runs while there are lines in the second file to read.
+	#Determines the dimensions of the second file so that I can compare
+	#to the first file.
+	while read m2lines
+	do
+		m2rows=`expr $m2rows + 1`
+		
+		#Only runs once to count the number of columns in the file.
+		if [ $m2columns == 0 ]
+		then
+			for i in $m2lines
+			do
+				m2columns=`expr $m2columns + 1`
+			done
+		fi
+	done < $2
+
+	#Transposes the second file ($2) to make calculations easier later in the function.
+	while [[ "$transIndex" -le "$m2columns" ]]
+	do
+		#Cuts the current index's column and writes it to tempColumns file.
+		cut -f "$transIndex" "$2" > "$tempColumns"
+
+		#Creates a variable that contains the row created from using "ts -s '\n' '\t'" to transform
+		#the column cut above into a row. Did it this way so that I could use ${line%?} to get rid
+		#of the trailing tab before writing the new line into the tempTranspose file.
+		line=$(cat "$tempColumns" | tr -s '\n' '\t')
+		line=${line%?}
+
+		#To write the new line into our tempTranspose file.
+		echo "$line" >> "$tempTranspose"
+		
+		transIndex=`expr $transIndex + 1`
+
+		rm $tempColumns
+	done
+
+	#Checks to make sure the dimensions of the two matrices are equal.
+	#If they are equal, the function runs normally.
+	if [[ "$m1columns" == "$m2rows" ]]
+	then
+		tempProduct="tempProductFile$$"
+
+		#While loop runs as long as there are lines to read in each of the matrix files passed in.
+		while read line1
+	 	do
+			while read line2
+			do
+				#Resets index to 1 each loop.
+				index=1
+
+		 		while (( "$index" <= "$m1columns" ))
+		 		do
+					#Cuts the number from the index position of the line into a variable
+					#so that we can use it for the sum calculation below.
+		 			m1num=$( echo "$line1" | cut -f "$index" )
+		 			m2num=$( echo "$line2" | cut -f "$index" )
+
+		 			product=$(( m1num * m2num ))
+					sum=$(( sum + product ))
+	 				index=$(( index + 1 ))
+				done
+	 			
+				#While the index is less than or equal to number of columns, sum is printed
+				#to tempProduct followed by a tab. It is set up so that during the last loop of the while
+				#loop above, index will be equal to columns+1. For example, if the matrix is 2x4,
+				#the while loop will run 4 times, and the 4th time, index will equal 5. So due to the if
+				#statement below the last number will still be printed on the same line, but is followed with
+				#a newline rather than a tab, so that the next time the while read line loop runs, the printing
+				#correctly starts on a new line.
+				if [ "$index2" -lt "$m2columns" ]
+ 				then
+ 					printf '%s\t' "$sum" >> "$tempProduct"
+				else
+ 					printf '%s\n' "$sum" >> "$tempProduct"
+
+					#Resets the index used for printing back to 0 so the correct amount of numbers
+					#are printed on the next line (row).
+					index2=0
+				fi
+
+				#Resets the product and sum variables.		
+				product=0
+				sum=0
+
+				index2=$(( index2 + 1 ))
+
+			done < "$tempTranspose"
+		done <"$1"
+
+		#Removes trailing tabs from tempProduct.
+		truncate -s -1 "$tempProduct"
+
+		echo >> "$tempProduct"
+		cat "$tempProduct"
+
+		rm $tempProduct
+		rm $tempTranspose
+
+		exit 0
+	#If the matrices' dimensions are not equal, outputs it to the user,
+	#then exits and redirects to std error.
+	else
+		echo "Error. Matrices dimensions do not follow the rules of matrix multiplication." 1>&2
+		
+		rm $tempTranspose
+
+		exit 1	
+	fi
+}
+
+#Checks to see if the command entered is valid (dims, transpose, add, etc.).
+if [[ "$1" != "dims" && "$1" != "transpose" && "$1" != "mean" && "$1" != "add" && "$1" != "multiply" ]]
+#If the command is invalid, outputs it to the user, then exits and redirects
+#to std error.
+then
+	echo "Error. Invalid command." 1<&2
+	exit 1
+fi
+
+#Only runs if the dims function is called.
+if [ "$1" == "dims" ]
+then
+
+	#Check to see if there are too many files. If there are,
+	#exits and redirects output to std error.
+	if (("$#" > 2))
+	then
+		echo "Error. Too many files passed." 1>&2
+		exit 1
+	#Check to see if file is non-existent. If it doesn't,
+	#exits and redirects output to std error.
+	elif [ ! -r $2 ]
+	then
+		echo "Error. File does not exist." 1>&2
+		exit 1
+	fi
+	
+	#Tip from the instructor on how to call the function.
+	$1 "${@:2}"
+fi
+
+#Only runs if the transpose function is called.
+if [ "$1" == "transpose" ]
+then
+	#Check to see if there are too many files. If there are,
+	#exits and redirects output to std error.
+	if (("$#" > 2))
+	then
+		echo "Error. Too many files passed." 1>&2
+		exit 1
+	#Check to see if file is readable. If it isn't,
+	#exits and redirects output to std error.
+	elif  [ ! -r "$2" ]
+	then
+		echo "Error. File is unreadable." 1>&2
+		exit 1
+		
+	fi
+	
+	#Tip from the instructor on how to call the function.
+	$1 "${@:2}"
+fi
+
+#Only runs if the mean function is called.
+if [ "$1" == "mean" ]
+then
+	#Check to see if there are too many files. If there are,
+	#exits and redirects output to std error.
+	if (("$#" > 2))
+	then
+		echo "Error. Too many files passed." 1>&2
+		exit 1
+	#Check to see if file is readable. If it isn't,
+	#exits and redirects output to std error.
+	elif  [ ! -r "$2" ]
+	then
+		echo "Error. File is unreadable." 1>&2
+		exit 1
+		
+	fi
+	
+	#Tip from the instructor on how to call the function.
+	$1 "${@:2}"
+fi
+
+#Only runs if the add function is called.
+if [ "$1" == "add" ]
+then
+	#Check to see if there are too many files. If there are,
+	#exits and redirects output to std error.
+	if (("$#" > 3))
+	then
+		echo "Error. Too many files passed." 1>&2
+		exit 1
+	#Checks to see if there are enough files passed to the
+	#function. If not, exits and redirects output to std error.
+	elif (("$#" < 3))
+	then
+		echo "Error. Not enough files passed." 1>&2
+		exit 1
+	#Check to see if file is readable. If it isn't,
+	#exits and redirects output to std error.
+	elif  [ ! -r "$2" ]
+	then
+		echo "Error. File is unreadable." 1>&2
+		exit 1
+		
+	fi
+	
+	#Tip from the instructor on how to call the function.
+	$1 "${@:2}"
+fi
+
+#Only runs if the multiply function is called.
+if [ "$1" == "multiply" ]
+then
+	#Check to see if there are too many files. If there are,
+	#exits and redirects output to std error.
+	if (("$#" > 3))
+	then
+		echo "Error. Too many files passed." 1>&2
+		exit 1
+	#Checks to see if there are enough files passed to the
+	#function. If not, exits and redirects output to std error.
+	elif (("$#" < 3))
+	then
+		echo "Error. Not enough files passed." 1>&2
+		exit 1
+	#Check to see if file is readable. If it isn't,
+	#exits and redirects output to std error.
+	elif  [ ! -r "$2" ]
+	then
+		echo "Error. File is unreadable." 1>&2
+		exit 1
+		
+	fi
+	
+	#Tip from the instructor on how to call the function.
+	$1 "${@:2}"
+fi
